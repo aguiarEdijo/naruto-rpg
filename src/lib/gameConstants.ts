@@ -384,9 +384,22 @@ export function levelUpCharacter(character: Character): Character {
     const newLevel = character.level + 1;
     const levelUpPoints = calculateLevelUpPoints(character.level);
 
+    // Atualizar patente baseada no nível
+    let newRank = character.rank;
+    if (newLevel >= 15) {
+        newRank = 'Hokage';
+    } else if (newLevel >= 10) {
+        newRank = 'Jounin';
+    } else if (newLevel >= 5) {
+        newRank = 'Chunnin';
+    } else {
+        newRank = 'Genin';
+    }
+
     return {
         ...character,
         level: newLevel,
+        rank: newRank,
         availableAttributePoints: character.availableAttributePoints + levelUpPoints.attributePoints,
         availableSkillPoints: character.availableSkillPoints + levelUpPoints.skillPoints,
         updatedAt: new Date(),
