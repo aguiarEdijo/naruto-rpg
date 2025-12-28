@@ -88,7 +88,7 @@ export default function GMCharactersPage() {
 
     return (
         <div className="min-h-screen bg-background">
-            <GMHeader />
+            <GMHeader title="Todas as Fichas de Personagem" backLink="/dashboard/gm" />
 
             <Container className="py-8">
                 <div className="mb-6">

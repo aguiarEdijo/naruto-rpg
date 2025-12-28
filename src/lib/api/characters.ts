@@ -2,33 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import { Character, CustomSkill, Jutsu, Item, Enhancement, Defect } from '@/types/game';
 
-// Interfaces para dados do Supabase
-interface SupabaseEnhancementData {
-    enhancement_id: string;
-    enhancements: {
-        id: string;
-        name: string;
-        description: string;
-        effects: string;
-        requirements: string;
-        clan: string;
-        restricted: string;
-    }[];
-}
-
-interface SupabaseDefectData {
-    defect_id: string;
-    defects: {
-        id: string;
-        name: string;
-        description: string;
-        penalties: string;
-        restrictions: string;
-        clan: string;
-        restricted: string;
-        points: number;
-    }[];
-}
+// Interfaces para dados do Supabase (mantidas para referência futura, mas não usadas atualmente)
 
 // ===== PERSONAGENS =====
 

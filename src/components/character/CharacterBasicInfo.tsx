@@ -180,7 +180,7 @@ export const CharacterBasicInfo: React.FC<CharacterBasicInfoProps> = ({
 
         // Obter modificadores da nova faixa etária
         const newModifiers = getAgeModifiers(newAgeRange);
-        const currentModifiers = getAgeModifiers(currentAgeRange);
+        const currentModifiers = getAgeModifiers(currentAgeRange || null);
 
         if (!newModifiers || !currentModifiers) {
             onCharacterUpdate({
