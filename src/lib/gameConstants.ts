@@ -1,10 +1,10 @@
 // Constantes do jogo com sistema de níveis
 
-import { Attributes, Resources, Skills, Clan, Rank, Character, Enhancement } from '@/types/game';
+import { Attributes, Skills, Clan, Character, Enhancement } from '@/types/game';
 import { LEVEL_SYSTEM, calculateLevelUpPoints } from './levelSystem';
 
 // Re-exportar tipos necessários
-export type { Character, Attributes, Resources, Skills, Clan, Rank, Enhancement };
+export type { Character, Attributes, Skills, Clan, Enhancement };
 
 // Sistema de Aprimoramentos por Nível
 export const ENHANCEMENT_SYSTEM = {
@@ -37,6 +37,7 @@ export const HUMAN_BASE_ATTRIBUTES: Attributes = {
     intelligence: 2,
     essence: 2,
     perception: 2,
+    influence: 2,
 };
 
 // Sistema de modificadores por idade
@@ -52,6 +53,7 @@ export const AGE_MODIFIERS = {
             intelligence: 0,
             essence: 0,
             perception: 0,
+            influence: 0,
         },
         description: 'Criança - Força e Vigor reduzidos'
     },
@@ -66,6 +68,7 @@ export const AGE_MODIFIERS = {
             intelligence: 0,
             essence: 0,
             perception: 0,
+            influence: 0,
         },
         description: 'Jovem - Sem modificadores'
     },
@@ -80,6 +83,7 @@ export const AGE_MODIFIERS = {
             intelligence: 0,
             essence: 0,
             perception: 0,
+            influence: 0,
         },
         description: 'Adulto - Força e Vigor aumentados'
     },
@@ -94,6 +98,7 @@ export const AGE_MODIFIERS = {
             intelligence: 1,
             essence: 0,
             perception: 1,
+            influence: 0,
         },
         description: 'Maduro - Inteligência e Percepção aumentados, Agilidade reduzida'
     },
@@ -108,6 +113,7 @@ export const AGE_MODIFIERS = {
             intelligence: 2,
             essence: 0,
             perception: 2,
+            influence: 0,
         },
         description: 'Idoso - Inteligência e Percepção muito aumentados, Força e Agilidade reduzidos'
     }
@@ -207,37 +213,136 @@ export const KONOHA_CLANS: Clan[] = [
     },
 ];
 
-export const calculateResources = (attributes: Attributes): Resources => {
+/**
+ * Calcula recursos do personagem (vida e chakra)
+ * Aceita regras do banco de dados, mas usa valores padrão como fallback
+ */
+export const calculateResources = (
+    attributes: Attributes,
+    rank: Character['rank'],
+    resourceRules?: {
+        health?: { formula: any; rank_multipliers: Record<Character['rank'], number> };
+        chakra?: { formula: any; rank_multipliers: Record<Character['rank'], number> };
+    }
+) => {
+    // Fallback: Base multiplier is 5 for Genin and increases by 1 per rank step
+    const defaultRankMultiplierMap: Record<Character['rank'], number> = {
+        Genin: 5,
+        Chunnin: 6,
+        Jounin: 7,
+        Hokage: 8,
+    };
+
+    // Usar regras do banco ou fallback
+    const healthMultiplier = resourceRules?.health?.rank_multipliers?.[rank] ?? defaultRankMultiplierMap[rank] ?? 5;
+    const chakraMultiplier = resourceRules?.chakra?.rank_multipliers?.[rank] ?? defaultRankMultiplierMap[rank] ?? 5;
+
     return {
-        health: attributes.vigor * 3 + attributes.strength,
-        chakra: attributes.essence * 4 + attributes.intelligence,
-        fatigue: attributes.vigor * 2 + attributes.strength,
-        stress: attributes.intelligence * 2 + attributes.perception,
+        health: attributes.vigor * healthMultiplier + attributes.strength,
+        chakra: attributes.essence * chakraMultiplier + attributes.intelligence,
     };
 };
 
-export const calculateSkills = (attributes: Attributes, bonuses: any = {}): Skills => {
-    const baseSkills = {
-        athletics: attributes.strength + attributes.agility,
-        stealth: attributes.agility + attributes.perception,
-        nature: attributes.vigor + attributes.perception,
-        sealing: attributes.intelligence + attributes.essence,
-        society: attributes.intelligence + attributes.perception,
-        chakraControl: attributes.essence + attributes.intelligence,
-        occultism: attributes.essence + attributes.perception,
-        performance: attributes.intelligence + attributes.agility,
-        crafts: attributes.strength + attributes.intelligence,
-        combatTechnique: attributes.strength + attributes.vigor,
+/**
+ * Calcula Resistência Mental (RM)
+ * Aceita regras do banco de dados, mas usa fórmula padrão como fallback
+ */
+export const calculateMentalResistance = (
+    attributes: Attributes,
+    resourceRules?: {
+        mental_resistance?: { formula: any };
+    }
+): number => {
+    // Fallback: soma dos atributos mentais dividido por 3
+    const mentalAttributes = attributes.intelligence + attributes.essence + attributes.perception;
+    return Math.floor(mentalAttributes / 3);
+};
+
+/**
+ * Calcula Resistência Física (RF)
+ * Aceita regras do banco de dados, mas usa fórmula padrão como fallback
+ */
+export const calculatePhysicalResistance = (
+    attributes: Attributes,
+    resourceRules?: {
+        physical_resistance?: { formula: any };
+    }
+): number => {
+    // Fallback: soma dos atributos físicos dividido por 3
+    const physicalAttributes = attributes.strength + attributes.agility + attributes.vigor;
+    return Math.floor(physicalAttributes / 3);
+};
+
+/**
+ * Calcula os valores base das perícias usando apenas o atributo base definido para cada uma.
+ * @param character - O personagem completo
+ * @param skillsMapping - Mapeamento de habilidades com seus atributos base
+ */
+export const calculateSkills = (character: Character, skillsMapping: Record<string, string>): Skills => {
+    // Função auxiliar para obter o valor de um atributo pelo nome/abreviação
+    const getAttributeValue = (attributeAbbr: string): number => {
+        const attributeMap: Record<string, keyof Character['baseAttributes']> = {
+            'FOR': 'strength',
+            'VIG': 'vigor',
+            'AGI': 'agility',
+            'INT': 'intelligence',
+            'PER': 'perception',
+            'ESS': 'essence',
+            'INF': 'influence'
+        };
+
+        const attributeKey = attributeMap[attributeAbbr] || 'strength';
+        const baseValue = character.baseAttributes[attributeKey] || 2;
+        const distributedValue = character.distributedAttributes[attributeKey] || 0;
+        const bonusValue = character.attributeBonuses[attributeKey] || 0;
+
+        return baseValue + distributedValue + bonusValue;
     };
 
-    // Aplicar bônus se fornecidos
-    Object.keys(baseSkills).forEach(skill => {
-        if (bonuses[skill]) {
-            baseSkills[skill as keyof Skills] += bonuses[skill];
+    const baseSkills: Skills = {
+        athletics: 0,
+        stealth: 0,
+        nature: 0,
+        sealing: 0,
+        society: 0,
+        chakraControl: 0,
+        occultism: 0,
+        performance: 0,
+    };
+
+    // Calcular cada perícia usando apenas seu atributo base
+    Object.keys(skillsMapping).forEach((skillName) => {
+        const attributeAbbr = skillsMapping[skillName];
+        const attributeValue = getAttributeValue(attributeAbbr);
+
+        // Mapear nome da perícia para chave do sistema
+        const skillKey = skillName.toLowerCase().replace(/\s+/g, '');
+        const mappedKey = mapSkillNameToKey(skillKey);
+
+        if (mappedKey in baseSkills) {
+            (baseSkills as any)[mappedKey] = attributeValue;
         }
     });
 
     return baseSkills;
+};
+
+/**
+ * Mapeia o nome da perícia para a chave do sistema
+ */
+const mapSkillNameToKey = (skillName: string): keyof Skills => {
+    const mapping: Record<string, keyof Skills> = {
+        'athletics': 'athletics',
+        'stealth': 'stealth',
+        'nature': 'nature',
+        'sealing': 'sealing',
+        'society': 'society',
+        'chakracontrol': 'chakraControl',
+        'occultism': 'occultism',
+        'performance': 'performance'
+    };
+
+    return mapping[skillName] || 'athletics';
 };
 
 export const calculateChakraControl = (attributes: Attributes): number => {
@@ -245,8 +350,8 @@ export const calculateChakraControl = (attributes: Attributes): number => {
 };
 
 // Funções para calcular perícias totais
-export const calculateTotalSkills = (attributes: Attributes, distributedSkills: any, bonuses: any = {}) => {
-    const baseSkills = calculateSkills(attributes);
+export const calculateTotalSkills = (character: Character, skillsMapping: Record<string, string>, distributedSkills: any, bonuses: any = {}) => {
+    const baseSkills = calculateSkills(character, skillsMapping);
     return {
         athletics: baseSkills.athletics + (distributedSkills.athletics || 0) + (bonuses.athletics || 0),
         stealth: baseSkills.stealth + (distributedSkills.stealth || 0) + (bonuses.stealth || 0),
@@ -256,9 +361,12 @@ export const calculateTotalSkills = (attributes: Attributes, distributedSkills: 
         chakraControl: baseSkills.chakraControl + (distributedSkills.chakraControl || 0) + (bonuses.chakraControl || 0),
         occultism: baseSkills.occultism + (distributedSkills.occultism || 0) + (bonuses.occultism || 0),
         performance: baseSkills.performance + (distributedSkills.performance || 0) + (bonuses.performance || 0),
-        crafts: baseSkills.crafts + (distributedSkills.crafts || 0) + (bonuses.crafts || 0),
-        combatTechnique: baseSkills.combatTechnique + (distributedSkills.combatTechnique || 0) + (bonuses.combatTechnique || 0),
     };
+};
+
+// Função para calcular base de perícia customizada
+export const calculateCustomSkillBase = (attributes: Attributes, attr1: keyof Attributes, attr2: keyof Attributes): number => {
+    return attributes[attr1] + attributes[attr2];
 };
 
 // Funções para sistema de aprimoramentos
@@ -296,7 +404,7 @@ export function createEmptyCharacter(userId: string, name: string, clan: string,
         baseAttributes[attr as keyof Attributes] += modifier;
     });
 
-    const resources = calculateResources(baseAttributes);
+    const resources = calculateResources(baseAttributes, 'Genin');
 
     // Perícias distribuídas pelo jogador (inicialmente 0)
     const skills = {
@@ -308,8 +416,6 @@ export function createEmptyCharacter(userId: string, name: string, clan: string,
         chakraControl: 0,
         occultism: 0,
         performance: 0,
-        crafts: 0,
-        combatTechnique: 0,
     };
 
     // Calcular pontos extras baseados no tipo de personagem
@@ -342,6 +448,7 @@ export function createEmptyCharacter(userId: string, name: string, clan: string,
             intelligence: 0,
             essence: 0,
             perception: 0,
+            influence: 0,
         },
         attributeBonuses: {
             strength: 0,
@@ -350,6 +457,7 @@ export function createEmptyCharacter(userId: string, name: string, clan: string,
             intelligence: 0,
             essence: 0,
             perception: 0,
+            influence: 0,
         },
         resources,
         auxiliary: {
@@ -367,10 +475,10 @@ export function createEmptyCharacter(userId: string, name: string, clan: string,
             chakraControl: 0,
             occultism: 0,
             performance: 0,
-            crafts: 0,
-            combatTechnique: 0,
         },
-        techniques: [],
+        customSkills: [],
+        jutsus: [],
+        items: [],
         enhancements: [],
         defects: [],
         isEditable: true,
@@ -396,10 +504,23 @@ export function levelUpCharacter(character: Character): Character {
         newRank = 'Genin';
     }
 
+    // Recalcular recursos usando o novo rank
+    const totalAttributes = {
+        strength: character.baseAttributes.strength + character.distributedAttributes.strength + character.attributeBonuses.strength,
+        agility: character.baseAttributes.agility + character.distributedAttributes.agility + character.attributeBonuses.agility,
+        vigor: character.baseAttributes.vigor + character.distributedAttributes.vigor + character.attributeBonuses.vigor,
+        intelligence: character.baseAttributes.intelligence + character.distributedAttributes.intelligence + character.attributeBonuses.intelligence,
+        essence: character.baseAttributes.essence + character.distributedAttributes.essence + character.attributeBonuses.essence,
+        perception: character.baseAttributes.perception + character.distributedAttributes.perception + character.attributeBonuses.perception,
+        influence: character.baseAttributes.influence + character.distributedAttributes.influence + character.attributeBonuses.influence,
+    };
+    const newResources = calculateResources(totalAttributes, newRank);
+
     return {
         ...character,
         level: newLevel,
         rank: newRank,
+        resources: newResources,
         availableAttributePoints: character.availableAttributePoints + levelUpPoints.attributePoints,
         availableSkillPoints: character.availableSkillPoints + levelUpPoints.skillPoints,
         updatedAt: new Date(),
@@ -409,44 +530,45 @@ export function levelUpCharacter(character: Character): Character {
 export function spendAttributePoint(character: Character, attribute: keyof Attributes): Character {
     if (character.availableAttributePoints <= 0) return character;
 
-    const newAttributes = {
-        ...character.attributes,
-        [attribute]: character.attributes[attribute] + 1,
+    const newDistributedAttributes = {
+        ...character.distributedAttributes,
+        [attribute]: character.distributedAttributes[attribute] + 1,
     };
 
-    const newResources = calculateResources(newAttributes);
-    const newSkills = calculateSkills(newAttributes);
+    // Recalcular recursos com novos atributos
+    const totalAttributes = {
+        strength: character.baseAttributes.strength + newDistributedAttributes.strength + character.attributeBonuses.strength,
+        agility: character.baseAttributes.agility + newDistributedAttributes.agility + character.attributeBonuses.agility,
+        vigor: character.baseAttributes.vigor + newDistributedAttributes.vigor + character.attributeBonuses.vigor,
+        intelligence: character.baseAttributes.intelligence + newDistributedAttributes.intelligence + character.attributeBonuses.intelligence,
+        essence: character.baseAttributes.essence + newDistributedAttributes.essence + character.attributeBonuses.essence,
+        perception: character.baseAttributes.perception + newDistributedAttributes.perception + character.attributeBonuses.perception,
+        influence: character.baseAttributes.influence + newDistributedAttributes.influence + character.attributeBonuses.influence,
+    };
+
+    const newResources = calculateResources(totalAttributes, character.rank);
 
     return {
         ...character,
-        attributes: newAttributes,
+        distributedAttributes: newDistributedAttributes,
         resources: newResources,
-        naturalSkills: newSkills,
-        trainedSkills: newSkills,
         availableAttributePoints: character.availableAttributePoints - 1,
         updatedAt: new Date(),
     };
 }
 
-export function spendSkillPoint(character: Character, skillType: 'natural' | 'trained', skill: string): Character {
+export function spendSkillPoint(character: Character, skill: keyof Character['skills']): Character {
     if (character.availableSkillPoints <= 0) return character;
 
-    const newCharacter = { ...character };
+    const newSkills = {
+        ...character.skills,
+        [skill]: character.skills[skill] + 1,
+    };
 
-    if (skillType === 'natural') {
-        newCharacter.naturalSkills = {
-            ...character.naturalSkills,
-            [skill]: character.naturalSkills[skill as keyof typeof character.naturalSkills] + 1,
-        };
-    } else {
-        newCharacter.trainedSkills = {
-            ...character.trainedSkills,
-            [skill]: character.trainedSkills[skill as keyof typeof character.trainedSkills] + 1,
-        };
-    }
-
-    newCharacter.availableSkillPoints = character.availableSkillPoints - 1;
-    newCharacter.updatedAt = new Date();
-
-    return newCharacter;
+    return {
+        ...character,
+        skills: newSkills,
+        availableSkillPoints: character.availableSkillPoints - 1,
+        updatedAt: new Date(),
+    };
 }

@@ -46,7 +46,7 @@ export const Container: React.FC<ContainerProps> = ({
     );
 };
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
     children: React.ReactNode;
     className?: string;
     variant?: 'default' | 'elevated' | 'outlined';
@@ -57,7 +57,8 @@ export const Card: React.FC<CardProps> = ({
     children,
     className = '',
     variant = 'default',
-    padding = 'md'
+    padding = 'md',
+    ...props
 }) => {
     const variantClasses = {
         default: 'bg-surface border border-default shadow-sm',
@@ -77,7 +78,9 @@ export const Card: React.FC<CardProps> = ({
             variantClasses[variant],
             paddingClasses[padding],
             className
-        )}>
+        )}
+            {...props}
+        >
             {children}
         </div>
     );
@@ -193,7 +196,7 @@ export const Select: React.FC<SelectProps> = ({
     label,
     error,
     helperText,
-    options,
+    options = [],
     className = '',
     ...props
 }) => {
@@ -304,56 +307,8 @@ export const Badge: React.FC<BadgeProps> = ({
     );
 };
 
-interface ModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    children: React.ReactNode;
-    size?: 'sm' | 'md' | 'lg' | 'xl';
-}
-
-export const Modal: React.FC<ModalProps> = ({
-    isOpen,
-    onClose,
-    title,
-    children,
-    size = 'md'
-}) => {
-    if (!isOpen) return null;
-
-    const sizeClasses = {
-        sm: 'max-w-md',
-        md: 'max-w-2xl',
-        lg: 'max-w-4xl',
-        xl: 'max-w-6xl'
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div
-                className="fixed inset-0 backdrop-blur-sm transition-all"
-                onClick={onClose}
-            />
-            <div className={cn(
-                'relative bg-white rounded-xl shadow-xl w-[95%] h-[80vh] overflow-hidden border border-gray-200',
-                sizeClasses[size]
-            )}>
-                <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-xl font-bold transition-normal"
-                    >
-                        ×
-                    </button>
-                </div>
-                <div className="p-4 overflow-y-auto h-[calc(80vh-80px)]">
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
-};
+// Modal exportado do arquivo separado
+export { Modal } from './Modal';
 
 interface GridProps {
     children: React.ReactNode;
@@ -454,4 +409,7 @@ export const Flex: React.FC<FlexProps> = ({
         </div>
     );
 };
+
+// Exportar componentes de Tabs
+export { Tabs, TabPanel, TabContainer } from './Tabs';
 

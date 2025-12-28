@@ -1,6 +1,9 @@
-import React from 'react';
-import { Character, calculateSkills } from '@/lib/gameConstants';
-import { Card, Button, Grid } from '@/components/ui';
+import React, { useMemo } from 'react';
+import { Character } from '@/lib/gameConstants';
+import { Card } from '@/components/ui';
+import { useAttributes } from '@/lib/hooks/useAttributes';
+import { useSkills } from '@/lib/hooks/useSkills';
+import { SkillItemCompact } from './SkillItemCompact';
 
 interface SkillSectionProps {
     character: Character;
@@ -11,14 +14,46 @@ export const SkillSection: React.FC<SkillSectionProps> = ({
     character,
     onCharacterUpdate
 }) => {
-    const handleSpendSkillPoint = (skill: keyof Character['skills']) => {
+    const { attributeMapping } = useAttributes();
+    const { skills, loading: skillsLoading, mapAttributeToKey } = useSkills();
+
+    // Mapeamento de perícias do banco - usar todas as perícias diretamente
+    const skillsList = useMemo(() => {
+        return skills.map((skill) => ({
+            id: skill.id,
+            name: skill.nome,
+            attribute: skill.atributo_base,
+            abbreviation: skill.atributo_base
+        }));
+    }, [skills]);
+
+    // Ordenar perícias alfabeticamente
+    const sortedSkills = useMemo(() => {
+        return [...skillsList].sort((a, b) =>
+            a.name.localeCompare(b.name, 'pt-BR')
+        );
+    }, [skillsList]);
+
+    // Função para obter o valor base de uma perícia usando apenas seu atributo base
+    const getSkillBaseValue = (skillAttribute: string): number => {
+        const attributeKey = mapAttributeToKey(skillAttribute) as keyof Character['baseAttributes'];
+        if (!attributeKey) return 0;
+
+        const baseValue = character.baseAttributes[attributeKey] || 0;
+        const distributedValue = character.distributedAttributes[attributeKey] || 0;
+        const bonusValue = character.attributeBonuses[attributeKey] || 0;
+
+        return baseValue + distributedValue + bonusValue;
+    };
+
+    const handleSpendSkillPoint = (skillName: string) => {
         if (!character || character.availableSkillPoints <= 0) return;
 
         const updatedCharacter = {
             ...character,
-            skills: {
-                ...character.skills,
-                [skill]: character.skills[skill] + 1,
+            skillValues: {
+                ...(character.skillValues || {}),
+                [skillName]: ((character.skillValues || {})[skillName] || 0) + 1,
             },
             availableSkillPoints: character.availableSkillPoints - 1,
             updatedAt: new Date(),
@@ -27,14 +62,14 @@ export const SkillSection: React.FC<SkillSectionProps> = ({
         onCharacterUpdate(updatedCharacter);
     };
 
-    const handleRemoveSkillPoint = (skill: keyof Character['skills']) => {
-        if (!character || character.skills[skill] <= 0) return;
+    const handleRemoveSkillPoint = (skillName: string) => {
+        if (!character || ((character.skillValues || {})[skillName] || 0) <= 0) return;
 
         const updatedCharacter = {
             ...character,
-            skills: {
-                ...character.skills,
-                [skill]: character.skills[skill] - 1,
+            skillValues: {
+                ...(character.skillValues || {}),
+                [skillName]: ((character.skillValues || {})[skillName] || 0) - 1,
             },
             availableSkillPoints: character.availableSkillPoints + 1,
             updatedAt: new Date(),
@@ -45,97 +80,61 @@ export const SkillSection: React.FC<SkillSectionProps> = ({
 
     return (
         <Card>
-            <h2 className="heading-4 mb-4">Perícias</h2>
+            <div className="mb-4">
+                <h2 className="heading-4">Perícias</h2>
+            </div>
 
-            <div className="space-y-3">
-                {Object.entries(character.skills).map(([key, distributed]) => {
-                    const bonus = character.skillBonuses[key as keyof typeof character.skillBonuses];
+            <div className="space-y-2">
+                {skillsLoading ? (
+                    <Card variant="outlined" className="p-6 text-center">
+                        <div className="animate-pulse">Carregando perícias...</div>
+                    </Card>
+                ) : sortedSkills.length === 0 ? (
+                    <Card variant="outlined" className="p-6 text-center">
+                        <div className="text-gray-500 text-sm">Nenhuma perícia disponível. Execute o script SQL no Supabase.</div>
+                    </Card>
+                ) : (
+                    /* Perícias do banco de dados - ordenadas alfabeticamente */
+                    sortedSkills.map((skillData) => {
+                        const distributed = (character.skillValues || {})[skillData.name] || 0;
+                        const bonus = (character.skillBonuses || {})[skillData.name] || 0;
 
-                    // Calcular atributos totais para o cálculo da base
-                    const totalAttributes = {
-                        strength: character.baseAttributes.strength + character.distributedAttributes.strength + character.attributeBonuses.strength,
-                        agility: character.baseAttributes.agility + character.distributedAttributes.agility + character.attributeBonuses.agility,
-                        vigor: character.baseAttributes.vigor + character.distributedAttributes.vigor + character.attributeBonuses.vigor,
-                        intelligence: character.baseAttributes.intelligence + character.distributedAttributes.intelligence + character.attributeBonuses.intelligence,
-                        essence: character.baseAttributes.essence + character.distributedAttributes.essence + character.attributeBonuses.essence,
-                        perception: character.baseAttributes.perception + character.distributedAttributes.perception + character.attributeBonuses.perception,
-                    };
+                        // Obter valor base usando apenas o atributo base da perícia
+                        const base = getSkillBaseValue(skillData.attribute);
+                        const total = base + distributed + bonus;
 
-                    const baseSkills = calculateSkills(totalAttributes);
-                    const base = baseSkills[key as keyof typeof baseSkills];
-                    const total = base + (distributed as number) + bonus;
+                        // Obter nome do atributo (não exibido mais, mas mantido para compatibilidade)
+                        const attributeName = attributeMapping.find(
+                            a => a.abbreviation === skillData.abbreviation
+                        )?.name || skillData.abbreviation;
 
-                    return (
-                        <Card key={key} variant="outlined" className="bg-white/70">
-                            <div className="flex justify-between items-center mb-2">
-                                <label className="text-sm font-semibold text-gray-700">
-                                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                                </label>
-                                <div className="flex space-x-1">
-                                    {(distributed as number) > 0 && character.isEditable && (
-                                        <Button
-                                            variant="danger"
-                                            size="sm"
-                                            onClick={() => handleRemoveSkillPoint(key as keyof Character['skills'])}
-                                            className="px-2 py-1 text-xs"
-                                        >
-                                            -1
-                                        </Button>
-                                    )}
-                                    {character.availableSkillPoints > 0 && character.isEditable && (
-                                        <Button
-                                            variant="accent"
-                                            size="sm"
-                                            onClick={() => handleSpendSkillPoint(key as keyof Character['skills'])}
-                                            className="px-2 py-1 text-xs"
-                                        >
-                                            +1
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
+                        return (
+                            <SkillItemCompact
+                                key={skillData.id}
+                                skillName={skillData.name}
+                                attributeAbbr={skillData.abbreviation}
+                                attributeName={attributeName}
+                                description="" // Não mostramos descrição na versão compacta
+                                base={base}
+                                distributed={distributed}
+                                bonus={bonus}
+                                total={total}
+                                isEditable={character.isEditable}
+                                onAddPoint={() => character.availableSkillPoints > 0 ? handleSpendSkillPoint(skillData.name) : undefined}
+                                onRemovePoint={distributed > 0 ? () => handleRemoveSkillPoint(skillData.name) : undefined}
+                                onBonusChange={(value) => onCharacterUpdate({
+                                    ...character,
+                                    skillBonuses: {
+                                        ...(character.skillBonuses || {}),
+                                        [skillData.name]: value
+                                    }
+                                })}
+                                showDescription={false}
+                            />
+                        );
+                    })
+                )}
 
-                            <Grid cols={4} gap="sm">
-                                <div>
-                                    <label className="text-xs text-gray-500">Base</label>
-                                    <div className="w-full px-1 py-1 text-xs bg-gray-100 border border-gray-300 rounded text-center font-semibold">
-                                        {base}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-gray-500">Dist.</label>
-                                    <div className="w-full px-1 py-1 text-xs bg-purple-100 border border-gray-300 rounded text-center font-semibold">
-                                        {distributed as number}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-gray-500">Bônus</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="99"
-                                        value={String(bonus)}
-                                        disabled={!character.isEditable}
-                                        onChange={(e) => onCharacterUpdate({
-                                            ...character,
-                                            skillBonuses: {
-                                                ...character.skillBonuses,
-                                                [key]: parseInt(e.target.value) || 0
-                                            }
-                                        })}
-                                        className="w-full px-1 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:bg-gray-100 text-center"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-gray-500">Total</label>
-                                    <div className="w-full px-1 py-1 text-xs bg-green-100 border border-gray-300 rounded text-center font-semibold text-green-800">
-                                        {total}
-                                    </div>
-                                </div>
-                            </Grid>
-                        </Card>
-                    );
-                })}
             </div>
         </Card>
     );

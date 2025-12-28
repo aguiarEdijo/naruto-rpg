@@ -21,6 +21,7 @@ export interface Character {
         intelligence: number;   // Inteligência
         essence: number;       // Essência
         perception: number;     // Percepção
+        influence: number;      // Influência
     };
 
     // Pontos distribuídos pelo jogador nos atributos
@@ -31,6 +32,7 @@ export interface Character {
         intelligence: number;
         essence: number;
         perception: number;
+        influence: number;
     };
 
     // Bônus de atributos (por habilidades, itens, etc.)
@@ -41,6 +43,7 @@ export interface Character {
         intelligence: number;
         essence: number;
         perception: number;
+        influence: number;
     };
 
     // Recursos
@@ -70,26 +73,22 @@ export interface Character {
         chakraControl: number; // CONTROLE DE CHAKRA = ESS + INT
         occultism: number;      // OCULTISMO = ESS + PER
         performance: number;    // PERFORMANCE = INT + AGI
-        crafts: number;         // OFÍCIOS = FOR + INT
-        combatTechnique: number; // TÉCNICA DE COMBATE = FOR + VIG
     };
 
-    // Bônus de perícias (por habilidades, itens, etc.)
-    skillBonuses: {
-        athletics: number;
-        stealth: number;
-        nature: number;
-        sealing: number;
-        society: number;
-        chakraControl: number;
-        occultism: number;
-        performance: number;
-        crafts: number;
-        combatTechnique: number;
-    };
+    // Bônus de perícias (por habilidades, itens, etc.) - dinâmico para suportar perícias do banco
+    skillBonuses?: Record<string, number>;
 
-    // Técnicas conhecidas
-    techniques: Technique[];
+    // Valores das perícias - dinâmico para suportar perícias do banco
+    skillValues?: Record<string, number>;
+
+    // Perícias customizadas
+    customSkills: CustomSkill[];
+
+    // Jutsus conhecidos
+    jutsus: Jutsu[];
+
+    // Itens possuídos
+    items: Item[];
 
     // Aprimoramentos adquiridos
     enhancements: Enhancement[];
@@ -103,22 +102,35 @@ export interface Character {
     updatedAt: Date;
 }
 
-export interface Technique {
+export interface CustomSkill {
     id: string;
     name: string;
-    type: 'Taijutsu' | 'Ninjutsu' | 'Genjutsu';
-    level: number;           // 1-5
+    category: 'combat' | 'craft';
+    attribute1: keyof Attributes;
+    attribute2: keyof Attributes;
+    distributed: number;
+    bonus: number;
+}
+
+export interface Jutsu {
+    id: string;
+    name: string;
+    type: 'Ninjutsu' | 'Taijutsu' | 'Genjutsu';
+    description: string;
+    rank: number;           // 1-5
     chakraCost: number;
     damage: number;
-    requirements: {
-        strength?: number;
-        agility?: number;
-        vigor?: number;
-        intelligence?: number;
-        essence?: number;
-        perception?: number;
-    };
+    effects: string;
+}
+
+export interface Item {
+    id: string;
+    name: string;
     description: string;
+    quantity: number;
+    weight: number;
+    effects: string;
+    rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 }
 
 export interface Enhancement {
@@ -157,6 +169,7 @@ export interface Attributes {
     intelligence: number;
     essence: number;
     perception: number;
+    influence: number;
 }
 
 export interface Skills {
@@ -168,15 +181,13 @@ export interface Skills {
     chakraControl: number;
     occultism: number;
     performance: number;
-    crafts: number;
-    combatTechnique: number;
 }
 
 export interface Clan {
     id: string;
     name: string;
     description: string;
-    modifiers: {
+    attributeModifiers: {
         strength?: number;
         agility?: number;
         vigor?: number;

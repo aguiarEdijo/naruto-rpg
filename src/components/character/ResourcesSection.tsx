@@ -1,7 +1,8 @@
-import React from 'react';
-import { Character } from '@/lib/gameConstants';
+import React, { useMemo } from 'react';
+import { Character, calculatePhysicalResistance as calcRF, calculateMentalResistance as calcRM } from '@/lib/gameConstants';
 import { Card, Badge } from '@/components/ui';
 import { ResourceField } from './ResourceField';
+import { useResourceCalculationRules } from '@/hooks/queries/useGameRules';
 
 interface ResourcesSectionProps {
     character: Character;
@@ -12,35 +13,36 @@ export const ResourcesSection: React.FC<ResourcesSectionProps> = ({
     character,
     onCharacterUpdate
 }) => {
-    // Calcular recursos baseados nos atributos
-    const calculatePhysicalResistance = () => {
-        const physicalAttributes =
-            character.baseAttributes.strength +
-            character.distributedAttributes.strength +
-            character.attributeBonuses.strength +
-            character.baseAttributes.agility +
-            character.distributedAttributes.agility +
-            character.attributeBonuses.agility +
-            character.baseAttributes.vigor +
-            character.distributedAttributes.vigor +
-            character.attributeBonuses.vigor;
+    // Buscar regras de cálculo do banco de dados
+    const { data: resourceRules = [] } = useResourceCalculationRules();
 
-        return Math.floor(physicalAttributes / 3);
+    // Preparar atributos totais
+    const totalAttributes = useMemo(() => ({
+        strength: character.baseAttributes.strength + character.distributedAttributes.strength + character.attributeBonuses.strength,
+        agility: character.baseAttributes.agility + character.distributedAttributes.agility + character.attributeBonuses.agility,
+        vigor: character.baseAttributes.vigor + character.distributedAttributes.vigor + character.attributeBonuses.vigor,
+        intelligence: character.baseAttributes.intelligence + character.distributedAttributes.intelligence + character.attributeBonuses.intelligence,
+        essence: character.baseAttributes.essence + character.distributedAttributes.essence + character.attributeBonuses.essence,
+        perception: character.baseAttributes.perception + character.distributedAttributes.perception + character.attributeBonuses.perception,
+        influence: character.baseAttributes.influence + character.distributedAttributes.influence + character.attributeBonuses.influence,
+    }), [character]);
+
+    // Organizar regras por tipo
+    const rulesByType = useMemo(() => {
+        const rules: Record<string, any> = {};
+        resourceRules.forEach(rule => {
+            rules[rule.rule_type] = rule;
+        });
+        return rules;
+    }, [resourceRules]);
+
+    // Calcular resistências usando regras do banco (com fallback)
+    const calculatePhysicalResistance = () => {
+        return calcRF(totalAttributes, rulesByType);
     };
 
     const calculateMentalResistance = () => {
-        const mentalAttributes =
-            character.baseAttributes.intelligence +
-            character.distributedAttributes.intelligence +
-            character.attributeBonuses.intelligence +
-            character.baseAttributes.essence +
-            character.distributedAttributes.essence +
-            character.attributeBonuses.essence +
-            character.baseAttributes.perception +
-            character.distributedAttributes.perception +
-            character.attributeBonuses.perception;
-
-        return Math.floor(mentalAttributes / 3);
+        return calcRM(totalAttributes, rulesByType);
     };
 
     const handleResourceUpdate = (resourceType: keyof Character['resources'], field: 'base' | 'additional' | 'temporary', value: number) => {
