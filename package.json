@@ -10,12 +10,10 @@
     "import-defects": "node scripts/import-defects-from-emotions.js"
   },
   "dependencies": {
-    "@auth/supabase-adapter": "^1.11.0",
     "@supabase/supabase-js": "^2.76.1",
     "@tanstack/react-query": "^5.90.11",
     "dotenv": "^17.2.3",
     "next": "16.0.0",
-    "next-auth": "^5.0.0-beta.29",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

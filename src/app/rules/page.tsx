@@ -102,7 +102,6 @@ export default function RulesPage() {
                     </TabPanel>
                 </TabContainer>
             </Container>
-            </div>
         </div>
     );
 }
