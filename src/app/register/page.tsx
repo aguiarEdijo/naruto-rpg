@@ -49,14 +49,26 @@ export default function RegisterPage() {
                 }),
             });
 
+            const data = await response.json();
+            
             if (response.ok) {
-                router.push('/login?message=Conta criada com sucesso');
+                // Mostrar mensagem de sucesso
+                if (data.needsConfirmation) {
+                    setError(`✅ ${data.message}`);
+                    setTimeout(() => {
+                        router.push('/login?message=' + encodeURIComponent(data.message));
+                    }, 3000);
+                } else {
+                    router.push('/login?message=' + encodeURIComponent(data.message || 'Conta criada com sucesso'));
+                }
             } else {
-                const data = await response.json();
+                // Mostrar erro específico
                 setError(data.error || 'Erro ao criar conta');
+                console.error('Erro no registro:', data);
             }
-        } catch (error) {
-            setError('Erro ao criar conta');
+        } catch (error: any) {
+            console.error('Erro ao criar conta:', error);
+            setError(error.message || 'Erro ao criar conta. Verifique sua conexão e tente novamente.');
         } finally {
             setLoading(false);
         }
@@ -76,7 +88,11 @@ export default function RegisterPage() {
                     </div>
 
                     {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+                        <div className={`px-4 py-3 rounded-lg mb-4 ${
+                            error.startsWith('✅') 
+                                ? 'bg-green-100 border border-green-400 text-green-700' 
+                                : 'bg-red-100 border border-red-400 text-red-700'
+                        }`}>
                             {error}
                         </div>
                     )}
