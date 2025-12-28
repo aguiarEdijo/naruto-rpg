@@ -275,33 +275,45 @@ export async function saveCharacter(character: Character): Promise<boolean> {
         };
 
         let result;
-        if (character.id) {
+        if (character.id && character.id.trim() !== '') {
             // Atualizar personagem existente
+            console.log('📝 Atualizando personagem existente:', character.id);
             result = await supabase
                 .from('characters')
                 .update(characterData)
-                .eq('id', character.id);
+                .eq('id', character.id)
+                .select()
+                .single();
         } else {
             // Criar novo personagem
+            console.log('✨ Criando novo personagem...');
             result = await supabase
                 .from('characters')
                 .insert(characterData)
                 .select()
                 .single();
 
-            if (result.data) {
+            if (result.data && result.data.id) {
                 character.id = result.data.id;
+                console.log('✅ Novo personagem criado com ID:', character.id);
+            } else {
+                console.error('❌ Personagem criado mas não retornou ID:', result);
             }
         }
 
         if (result.error) {
-            console.error('Erro ao salvar personagem:', result.error);
+            console.error('❌ Erro ao salvar personagem:', result.error);
+            return false;
+        }
+
+        if (!character.id) {
+            console.error('❌ Personagem salvo mas não possui ID');
             return false;
         }
 
         return true;
     } catch (error) {
-        console.error('Erro ao salvar personagem:', error);
+        console.error('❌ Erro ao salvar personagem:', error);
         return false;
     }
 }
@@ -614,41 +626,56 @@ export async function deleteItem(itemId: string): Promise<boolean> {
 
 export async function fetchCharacterEnhancements(characterId: string): Promise<Enhancement[]> {
     try {
+        if (!characterId) {
+            console.warn('⚠️ fetchCharacterEnhancements chamado sem characterId');
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('character_enhancements')
             .select(`
             enhancement_id,
             enhancements (
                 id,
-                name,
-                description,
-                effects,
-                requirements,
-                clan,
-                restricted
+                nome,
+                descricao,
+                tipo,
+                clan_restricao,
+                rank_restricao,
+                requisitos,
+                custo,
+                acoes,
+                duracao
             )
         `)
             .eq('character_id', characterId);
 
         if (error) {
-            console.error('Erro ao buscar aprimoramentos:', error);
+            console.error('❌ Erro ao buscar aprimoramentos:', error);
             return [];
         }
 
-        return data.map((item: SupabaseEnhancementData) => {
-            const enhancement = item.enhancements[0]; // Pegar o primeiro elemento do array
-            return {
-                id: enhancement.id,
-                name: enhancement.name,
-                description: enhancement.description,
-                effects: enhancement.effects ? enhancement.effects.split(';').filter(e => e.trim()) : [],
-                requirements: enhancement.requirements ? JSON.parse(enhancement.requirements) : undefined,
-                clan: enhancement.clan || undefined,
-                restricted: enhancement.restricted || undefined,
-            };
-        });
+        if (!data || data.length === 0) {
+            return [];
+        }
+
+        const enhancements: Enhancement[] = [];
+        for (const item of data) {
+            const enhancement = Array.isArray(item.enhancements) ? item.enhancements[0] : item.enhancements;
+            if (enhancement) {
+                enhancements.push({
+                    id: String(enhancement.id),
+                    name: enhancement.nome || '',
+                    description: enhancement.descricao || '',
+                    clan: enhancement.clan_restricao || undefined,
+                    effects: [],
+                    requirements: enhancement.requisitos || {}
+                });
+            }
+        }
+        return enhancements;
     } catch (error) {
-        console.error('Erro ao buscar aprimoramentos:', error);
+        console.error('❌ Erro ao buscar aprimoramentos:', error);
         return [];
     }
 }
@@ -661,35 +688,35 @@ export async function fetchCharacterDefects(characterId: string): Promise<Defect
             defect_id,
             defects (
                 id,
-                name,
-                description,
-                penalties,
-                restrictions,
-                clan,
-                restricted,
-                points
+                nome,
+                descricao,
+                tipo
             )
         `)
             .eq('character_id', characterId);
 
         if (error) {
-            console.error('Erro ao buscar defeitos:', error);
+            console.error('❌ Erro ao buscar defeitos:', error);
             return [];
         }
 
-        return data.map((item: SupabaseDefectData) => {
-            const defect = item.defects[0]; // Pegar o primeiro elemento do array
-            return {
-                id: defect.id,
-                name: defect.name,
-                description: defect.description,
-                penalties: defect.penalties ? defect.penalties.split(';').filter(p => p.trim()) : [],
-                restrictions: defect.restrictions ? JSON.parse(defect.restrictions) : undefined,
-                clan: defect.clan || undefined,
-                restricted: defect.restricted || undefined,
-                points: defect.points || undefined,
-            };
-        });
+        if (!data || data.length === 0) {
+            return [];
+        }
+
+        const defects: Defect[] = [];
+        for (const item of data) {
+            const defect = Array.isArray(item.defects) ? item.defects[0] : item.defects;
+            if (defect) {
+                defects.push({
+                    id: String(defect.id),
+                    name: defect.nome || '',
+                    description: defect.descricao || '',
+                    penalties: [],
+                });
+            }
+        }
+        return defects;
     } catch (error) {
         console.error('Erro ao buscar defeitos:', error);
         return [];
@@ -786,38 +813,67 @@ export async function syncCharacterData(character: Character): Promise<boolean> 
     try {
         // Salvar personagem principal
         const characterSaved = await saveCharacter(character);
-        if (!characterSaved) return false;
+        if (!characterSaved) {
+            console.error('❌ Falha ao salvar personagem principal');
+            return false;
+        }
+
+        // Verificar se o character tem ID após salvar
+        if (!character.id) {
+            console.error('❌ Personagem não possui ID após salvar');
+            return false;
+        }
+
+        console.log('✅ Personagem salvo com ID:', character.id);
 
         // Sincronizar perícias customizadas
-        for (const skill of character.customSkills) {
-            if (skill.id.startsWith('temp_')) {
-                // Nova perícia
-                await addCustomSkill(character.id, skill);
-            } else {
-                // Perícia existente - atualizar se necessário
-                await updateCustomSkill(skill.id, skill);
+        if (character.customSkills && character.customSkills.length > 0) {
+            for (const skill of character.customSkills) {
+                try {
+                    if (skill.id.startsWith('temp_')) {
+                        // Nova perícia
+                        await addCustomSkill(character.id, skill);
+                    } else {
+                        // Perícia existente - atualizar se necessário
+                        await updateCustomSkill(skill.id, skill);
+                    }
+                } catch (error) {
+                    console.error('Erro ao sincronizar perícia customizada:', error);
+                }
             }
         }
 
         // Sincronizar jutsus
-        for (const jutsu of character.jutsus) {
-            if (jutsu.id.startsWith('temp_')) {
-                // Novo jutsu
-                await addJutsu(character.id, jutsu);
-            } else {
-                // Jutsu existente - atualizar se necessário
-                await updateJutsu(jutsu.id, jutsu);
+        if (character.jutsus && character.jutsus.length > 0) {
+            for (const jutsu of character.jutsus) {
+                try {
+                    if (jutsu.id.startsWith('temp_')) {
+                        // Novo jutsu
+                        await addJutsu(character.id, jutsu);
+                    } else {
+                        // Jutsu existente - atualizar se necessário
+                        await updateJutsu(jutsu.id, jutsu);
+                    }
+                } catch (error) {
+                    console.error('Erro ao sincronizar jutsu:', error);
+                }
             }
         }
 
         // Sincronizar itens
-        for (const item of character.items) {
-            if (item.id.startsWith('temp_')) {
-                // Novo item
-                await addItem(character.id, item);
-            } else {
-                // Item existente - atualizar se necessário
-                await updateItem(item.id, item);
+        if (character.items && character.items.length > 0) {
+            for (const item of character.items) {
+                try {
+                    if (item.id.startsWith('temp_')) {
+                        // Novo item
+                        await addItem(character.id, item);
+                    } else {
+                        // Item existente - atualizar se necessário
+                        await updateItem(item.id, item);
+                    }
+                } catch (error) {
+                    console.error('Erro ao sincronizar item:', error);
+                }
             }
         }
 
@@ -828,44 +884,75 @@ export async function syncCharacterData(character: Character): Promise<boolean> 
         ]);
 
         // Sincronizar aprimoramentos
-        const currentEnhancementIds = new Set(currentEnhancements.map(e => e.id));
-        const newEnhancementIds = new Set(character.enhancements.map(e => e.id));
+        if (character.enhancements && character.enhancements.length >= 0) {
+            const currentEnhancementIds = new Set(currentEnhancements.map(e => String(e.id)));
+            const newEnhancementIds = new Set(character.enhancements.map(e => String(e.id)));
 
-        // Remover aprimoramentos que não estão mais na lista
-        for (const enhancement of currentEnhancements) {
-            if (!newEnhancementIds.has(enhancement.id)) {
-                await removeCharacterEnhancement(character.id, enhancement.id);
+            // Remover aprimoramentos que não estão mais na lista
+            for (const enhancement of currentEnhancements) {
+                const enhancementId = String(enhancement.id);
+                if (!newEnhancementIds.has(enhancementId)) {
+                    try {
+                        await removeCharacterEnhancement(character.id, enhancementId);
+                    } catch (error) {
+                        console.error('Erro ao remover aprimoramento:', error);
+                    }
+                }
             }
-        }
 
-        // Adicionar novos aprimoramentos
-        for (const enhancement of character.enhancements) {
-            if (!currentEnhancementIds.has(enhancement.id)) {
-                await addCharacterEnhancement(character.id, enhancement.id);
+            // Adicionar novos aprimoramentos
+            for (const enhancement of character.enhancements) {
+                const enhancementId = String(enhancement.id);
+                if (!currentEnhancementIds.has(enhancementId)) {
+                    try {
+                        const success = await addCharacterEnhancement(character.id, enhancementId);
+                        if (!success) {
+                            console.error('❌ Falha ao adicionar aprimoramento:', enhancementId, enhancement);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao adicionar aprimoramento:', error, enhancement);
+                    }
+                }
             }
         }
 
         // Sincronizar defeitos
-        const currentDefectIds = new Set(currentDefects.map(d => d.id));
-        const newDefectIds = new Set(character.defects.map(d => d.id));
+        if (character.defects && character.defects.length >= 0) {
+            const currentDefectIds = new Set(currentDefects.map(d => String(d.id)));
+            const newDefectIds = new Set(character.defects.map(d => String(d.id)));
 
-        // Remover defeitos que não estão mais na lista
-        for (const defect of currentDefects) {
-            if (!newDefectIds.has(defect.id)) {
-                await removeCharacterDefect(character.id, defect.id);
+            // Remover defeitos que não estão mais na lista
+            for (const defect of currentDefects) {
+                const defectId = String(defect.id);
+                if (!newDefectIds.has(defectId)) {
+                    try {
+                        await removeCharacterDefect(character.id, defectId);
+                    } catch (error) {
+                        console.error('Erro ao remover defeito:', error);
+                    }
+                }
+            }
+
+            // Adicionar novos defeitos
+            for (const defect of character.defects) {
+                const defectId = String(defect.id);
+                if (!currentDefectIds.has(defectId)) {
+                    try {
+                        const success = await addCharacterDefect(character.id, defectId);
+                        if (!success) {
+                            console.error('❌ Falha ao adicionar defeito:', defectId, defect);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao adicionar defeito:', error, defect);
+                    }
+                }
             }
         }
 
-        // Adicionar novos defeitos
-        for (const defect of character.defects) {
-            if (!currentDefectIds.has(defect.id)) {
-                await addCharacterDefect(character.id, defect.id);
-            }
-        }
-
+        console.log('✅ Sincronização completa');
         return true;
     } catch (error) {
-        console.error('Erro ao sincronizar dados do personagem:', error);
+        console.error('❌ Erro ao sincronizar dados do personagem:', error);
         return false;
     }
 }

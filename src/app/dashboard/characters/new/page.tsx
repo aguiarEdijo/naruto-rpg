@@ -55,25 +55,45 @@ export default function NewCharacterPage() {
         setSaveError(null);
         
         try {
+            console.log('💾 Iniciando salvamento do personagem...', {
+                hasId: !!character.id,
+                name: character.name,
+                enhancementsCount: character.enhancements?.length || 0,
+                defectsCount: character.defects?.length || 0
+            });
+
             // Sincronizar todos os dados do personagem
-            const success = await syncCharacterData(character);
+            // IMPORTANTE: Passar uma cópia do character para não modificar o estado diretamente
+            const characterToSave = { ...character };
+            const success = await syncCharacterData(characterToSave);
             
             if (success) {
+                // Atualizar o character com o ID retornado
+                if (characterToSave.id && characterToSave.id !== character.id) {
+                    setCharacter(characterToSave);
+                }
+
                 // Redirecionar para a página de visualização
-                if (character.id) {
-                    router.push(`/dashboard/characters/${character.id}`);
+                if (characterToSave.id) {
+                    console.log('✅ Personagem salvo, redirecionando para:', characterToSave.id);
+                    router.push(`/dashboard/characters/${characterToSave.id}`);
                 } else {
-                    // Se ainda não tem ID, recarregar a página atual após salvar
-                    router.refresh();
+                    console.error('⚠️ Personagem salvo mas não retornou ID');
+                    setSaveError('Personagem salvo, mas houve um problema ao obter o ID. Recarregue a página.');
+                    setSaving(false);
                 }
             } else {
-                setSaveError('Erro ao salvar personagem. Por favor, tente novamente.');
+                console.error('❌ Falha ao salvar personagem');
+                setSaveError('Erro ao salvar personagem. Verifique o console para mais detalhes.');
             }
         } catch (error) {
-            console.error('Erro ao salvar personagem:', error);
-            setSaveError('Erro ao salvar personagem. Por favor, tente novamente.');
+            console.error('❌ Erro ao salvar personagem:', error);
+            setSaveError(`Erro ao salvar personagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
         } finally {
-            setSaving(false);
+            // Não definir setSaving(false) aqui se foi redirecionado com sucesso
+            if (!character.id || saveError) {
+                setSaving(false);
+            }
         }
     };
 

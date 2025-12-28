@@ -14,7 +14,7 @@ export const EnhancementsAndDefects: React.FC<EnhancementsAndDefectsProps> = ({
     onCharacterUpdate
 }) => {
     const { defects, loading: defectsLoading, getTypeColor, getTypeIcon } = useDefects();
-    const { enhancements, loading: enhancementsLoading, getGeneral, getByClan, getClanColor, getClanIcon, formatRequisitos } = useEnhancements();
+    const { enhancements, loading: enhancementsLoading, getGeneral, getByClan, getClanColor, getClanIcon, formatRequisitos, enhancementsByType } = useEnhancements();
     const [activeTab, setActiveTab] = useState<'gerais' | 'clan' | 'defects'>('gerais');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -42,6 +42,30 @@ export const EnhancementsAndDefects: React.FC<EnhancementsAndDefectsProps> = ({
     const generalEnhancements = getGeneral();
     const clanEnhancements = clanName ? getByClan(clanName) : [];
     const availableEnhancements = activeTab === 'gerais' ? generalEnhancements : clanEnhancements;
+
+    // Debug: verificar se os aprimoramentos estão sendo filtrados corretamente
+    React.useEffect(() => {
+        if (activeTab === 'clan' && clanName) {
+            const enhancementsFromDB = enhancements.filter(e => {
+                const clanRestricao = e.clan_restricao || 'Geral';
+                return clanRestricao.toLowerCase() === clanName.toLowerCase() || clanRestricao === clanName;
+            });
+            console.log('🔍 Debug aprimoramentos de clã:', {
+                clanId: character.clan,
+                clanName,
+                clanEnhancementsCount: clanEnhancements.length,
+                allEnhancementsCount: enhancements.length,
+                enhancementsFromDB: enhancementsFromDB.length,
+                enhancementsByClanKeys: Object.keys(enhancementsByType || {}),
+                clanEnhancementsFromHook: getByClan(clanName).length,
+                sampleEnhancements: enhancements.filter(e => e.clan_restricao).slice(0, 3).map(e => ({
+                    nome: e.nome,
+                    clan_restricao: e.clan_restricao
+                }))
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, clanName, character.clan]);
 
     return (
         <>
@@ -326,7 +350,21 @@ export const EnhancementsAndDefects: React.FC<EnhancementsAndDefectsProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {availableEnhancements.map((enhancement) => {
+                            {availableEnhancements.length === 0 ? (
+                                <div className="text-center text-gray-500 text-sm py-6">
+                                    {activeTab === 'clan' && clanName ? (
+                                        <>
+                                            <p className="mb-2">Nenhum aprimoramento disponível para o clã <strong>{clanName}</strong>.</p>
+                                            <p className="text-xs text-gray-400">
+                                                Clã selecionado: {clanName} | Clã ID: {character.clan}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p>Nenhum aprimoramento geral disponível.</p>
+                                    )}
+                                </div>
+                            ) : (
+                            availableEnhancements.map((enhancement) => {
                                 const isAcquired = character.enhancements.some(e => e.name === enhancement.nome);
                                 return (
                                     <Card key={enhancement.id} variant="outlined" className={`p-3 hover:shadow-md transition-shadow ${getClanColor(enhancement.clan_restricao)} border-opacity-50`}>
@@ -413,12 +451,8 @@ export const EnhancementsAndDefects: React.FC<EnhancementsAndDefectsProps> = ({
                                         </div>
                                     </Card>
                                 );
-                            })}
-                        </div>
-                    )}
-                    {!enhancementsLoading && availableEnhancements.length === 0 && (
-                        <div className="text-center text-gray-500 py-8">
-                            Nenhum aprimoramento {activeTab === 'gerais' ? 'geral' : 'do clã'} disponível.
+                            })
+                            )}
                         </div>
                     )}
                 </div>

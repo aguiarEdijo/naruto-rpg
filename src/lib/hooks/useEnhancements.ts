@@ -45,16 +45,43 @@ export const useEnhancements = () => {
     // Agrupar aprimoramentos por tipo e clã
     const enhancementsByType = enhancements.reduce((acc, enhancement) => {
         const key = enhancement.clan_restricao || 'Geral';
-        if (!acc[key]) {
-            acc[key] = [];
+        // Normalizar a chave (case-insensitive para evitar problemas)
+        const normalizedKey = key === null || key === '' ? 'Geral' : key.trim();
+        if (!acc[normalizedKey]) {
+            acc[normalizedKey] = [];
         }
-        acc[key].push(enhancement);
+        acc[normalizedKey].push(enhancement);
         return acc;
     }, {} as Record<string, Enhancement[]>);
 
     // Obter aprimoramentos por clã
     const getByClan = (clan: string): Enhancement[] => {
-        return enhancementsByType[clan] || [];
+        // Normalizar o nome do clã para busca (case-insensitive)
+        const normalizedClan = clan ? clan.trim() : '';
+        
+        // Buscar exato primeiro
+        let result = enhancementsByType[normalizedClan] || [];
+        
+        // Se não encontrou, tentar case-insensitive
+        if (result.length === 0 && normalizedClan) {
+            const foundKey = Object.keys(enhancementsByType).find(
+                key => key && key.toLowerCase() === normalizedClan.toLowerCase()
+            );
+            if (foundKey) {
+                result = enhancementsByType[foundKey] || [];
+            }
+        }
+        
+        // Debug log
+        if (normalizedClan && result.length === 0) {
+            console.log('⚠️ Nenhum aprimoramento encontrado para clã:', {
+                buscado: normalizedClan,
+                disponíveis: Object.keys(enhancementsByType),
+                todos: enhancements.filter(e => e.clan_restricao).map(e => e.clan_restricao)
+            });
+        }
+        
+        return result;
     };
 
     // Obter aprimoramentos gerais
