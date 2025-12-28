@@ -1,14 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Criar cliente Supabase para o servidor
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('❌ Variáveis de ambiente do Supabase não configuradas!');
+}
+
+const supabase = createClient(
+    supabaseUrl || '',
+    supabaseAnonKey || '',
+    {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    }
+);
 
 export async function POST(request: NextRequest) {
     try {
-        const { name, email, password, isGM } = await request.json();
+        let body;
+        try {
+            body = await request.json();
+        } catch (error) {
+            console.error('❌ Erro ao parsear JSON:', error);
+            return NextResponse.json(
+                { error: 'Dados inválidos. Verifique o formato da requisição.' },
+                { status: 400 }
+            );
+        }
+
+        const { name, email, password, isGM } = body;
+
+        console.log('📝 Dados recebidos:', { name, email, isGM, passwordLength: password?.length });
 
         // Validações básicas
-        if (!name || !email || !password) {
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
             return NextResponse.json(
-                { error: 'Todos os campos são obrigatórios' },
+                { error: 'Nome é obrigatório' },
+                { status: 400 }
+            );
+        }
+
+        if (!email || typeof email !== 'string' || !email.includes('@')) {
+            return NextResponse.json(
+                { error: 'Email inválido' },
+                { status: 400 }
+            );
+        }
+
+        if (!password || typeof password !== 'string') {
+            return NextResponse.json(
+                { error: 'Senha é obrigatória' },
                 { status: 400 }
             );
         }

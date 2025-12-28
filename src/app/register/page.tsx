@@ -49,7 +49,16 @@ export default function RegisterPage() {
                 }),
             });
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (error) {
+                console.error('Erro ao parsear resposta:', error);
+                setError('Erro ao processar resposta do servidor');
+                return;
+            }
+            
+            console.log('📡 Resposta do servidor:', { status: response.status, data });
             
             if (response.ok) {
                 // Mostrar mensagem de sucesso
@@ -63,8 +72,9 @@ export default function RegisterPage() {
                 }
             } else {
                 // Mostrar erro específico
-                setError(data.error || 'Erro ao criar conta');
-                console.error('Erro no registro:', data);
+                const errorMessage = data.error || data.message || `Erro ${response.status}: ${response.statusText}`;
+                setError(errorMessage);
+                console.error('❌ Erro no registro:', { status: response.status, data });
             }
         } catch (error: any) {
             console.error('Erro ao criar conta:', error);
